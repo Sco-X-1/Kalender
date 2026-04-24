@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Familien-Kalender</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #1a1a1b; 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            gap: 25px; 
+            height: 100vh; 
+            box-sizing: border-box; 
+            overflow: hidden;
+        }
+        .column { 
+            flex: 1; 
+            background: #ffffff; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        
+        /* --- HEUTE (Ruhiges Grün für Struktur, Leuchtendes Grün für Termine) --- */
+        .today-style .header { background: #2a7663; color: white; }
+        .today-style .event-time { background: #2a7663; }
+        
+        /* Das leuchtende Grün NUR für den ganztägigen Termin-Hintergrund */
+        .today-style .event-item.ganztaegig { 
+            background: #27a41f; 
+            color: white; 
+            border-left: 12px solid #1e8018; 
+            font-weight: 800;
+        }
+
+        /* --- MORGEN (Blau-Schema) --- */
+        .tomorrow-style .header { background: #005a9e; color: white; }
+        .tomorrow-style .event-time { background: #005a9e; }
+        .tomorrow-style .event-item.ganztaegig { 
+            background: #005a9e; 
+            color: white; 
+            border-left: 12px solid #004578; 
+            font-weight: 800;
+        }
+
+        .header { 
+            padding: 25px; 
+            text-align: center; 
+            font-size: 2.2rem; 
+            font-weight: 800; 
+            line-height: 1.2;
+            border-bottom: 5px solid rgba(0,0,0,0.1);
+        }
+        .event-list { 
+            padding: 25px; 
+            overflow-y: auto; 
+            flex-grow: 1; 
+        }
+        .event-item { 
+            margin-bottom: 25px; 
+            padding: 15px;
+            border-bottom: 3px solid #f0f0f0; 
+            font-size: 2rem; 
+            display: flex; 
+            align-items: center; 
+            color: #222;
+        }
+        .event-item.ganztaegig { 
+            text-align: center; 
+            display: block; 
+            border-radius: 12px; 
+            margin-bottom: 35px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            border-bottom: none;
+        }
+        .event-time { 
+            color: white; 
+            padding: 8px 15px; 
+            border-radius: 10px; 
+            font-weight: bold; 
+            margin-right: 20px; 
+            min-width: 125px; 
+            text-align: center; 
+            font-size: 1.6rem; 
+            flex-shrink: 0;
+        }
+        .no-events { 
+            text-align: center; 
+            color: #bbb; 
+            margin-top: 60px; 
+            font-size: 1.8rem; 
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="column today-style">
+    <div id="head-today" class="header">HEUTE</div>
+    <div id="list-today" class="event-list">Lade Termine...</div>
+</div>
+
+<div class="column tomorrow-style">
+    <div id="head-tomorrow" class="header">MORGEN</div>
+    <div id="list-tomorrow" class="event-list">Lade Termine...</div>
+</div>
+
+<script>
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRRDIiBrm9YZt5C9DvZj_wggxRkzu-87djYSrBl2xU9HQShsHFchaXUd9fGwzuOrLMQIKVZNLyySIYU/pub?gid=0&single=true&output=csv';
+
+    async function fetchSheetData() {
+        try {
+            const finalUrl = csvUrl + "&nocache=" + new Date().getTime();
+            const response = await fetch(finalUrl, { mode: 'cors' });
+            const data = await response.text();
+            processCSV(data);
+        } catch (e) {
+            console.error("Fehler beim Laden:", e);
+            document.getElementById('list-today').innerHTML = "Fehler beim Laden der Daten.";
+        }
+    }
+
+    function processCSV(csvText) {
+        const lines = csvText.split(/\r?\n/);
+        const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(now.getDate() + 1);
+
+        const formatDate = (d) => {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            return `${day}.${month}.${d.getFullYear()}`;
+        };
+
+        const todayStr = formatDate(now);
+        const tomorrowStr = formatDate(tomorrow);
+
+        let htmlToday = "";
+        let htmlTomorrow = "";
+
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            const columns = line.split(',');
+            if (columns.length < 2) continue;
+
+            const dateVal = columns[0].replace(/"/g, '').trim();
+            const timeVal = columns[1] ? columns[1].replace(/"/g, '').trim() : "";
+            const titleVal = columns[2] ? columns[2].replace(/"/g, '').trim() : "Termin";
+
+            let item = "";
+            if (timeVal === "" || timeVal.toLowerCase().includes("ganz")) {
+                item = `<div class="event-item ganztaegig">
+                            <div>${titleVal}</div>
+                        </div>`;
+            } else {
+                item = `<div class="event-item">
+                            <span class="event-time">${timeVal}</span>
+                            <div>${titleVal}</div>
+                        </div>`;
+            }
+
+            if (dateVal === todayStr) htmlToday += item;
+            else if (dateVal === tomorrowStr) htmlTomorrow += item;
+        }
+
+        document.getElementById('list-today').innerHTML = htmlToday || '<div class="no-events">Keine Termine heute</div>';
+        document.getElementById('list-tomorrow').innerHTML = htmlTomorrow || '<div class="no-events">Keine Termine morgen</div>';
+        
+        const opt = { weekday: 'long' };
+        const dayToday = now.toLocaleDateString('de-DE', opt);
+        const dayTomorrow = tomorrow.toLocaleDateString('de-DE', opt);
+        
+        document.getElementById('head-today').innerHTML = "HEUTE<br><span style='font-size:1.3rem'>" + dayToday + ", " + todayStr + "</span>";
+        document.getElementById('head-tomorrow').innerHTML = "MORGEN<br><span style='font-size:1.3rem'>" + dayTomorrow + ", " + tomorrowStr + "</span>";
+    }
+
+    fetchSheetData();
+    setInterval(fetchSheetData, 1000 * 60 * 15);
+</script>
+
+</body>
+</html>
